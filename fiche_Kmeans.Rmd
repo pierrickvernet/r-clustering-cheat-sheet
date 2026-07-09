@@ -1,0 +1,349 @@
+---
+title: "Fiche de Révision : Algorithmes de Clustering, CAH de Ward, K-Means et ACP"
+author: "Pierrick Vernet - Master Iref - Université de Bordeaux"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: cosmo
+    toc: true
+    toc_float: true
+    number_sections: true
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Théorie : Apprentissage et Structures de Données
+
+## Apprentissage Non Supervisé vs Supervisé
+Le **Clustering** s’inscrit fondamentalement dans le cadre de l'**apprentissage non supervisé**. Contrairement à la classification supervisée (comme les $k$-NN, SVM ou arbres de décision) où l'on cherche à prédire une variable cible $Y$ connue à l'avance, le clustering vise à partitionner un ensemble d'individus en groupes homogènes (appelés classes ou *clusters*) sans aucune étiquette préalable. On cherche à faire émerger une structure intrinsèque cachée au sein des données en créant ex nihilo cette variable qualitative $Y$.
+
+## Représentation Matricielle et Remplissage sous R
+En statistique multivariée, nos données sont représentées par une matrice $X$ de dimensions $n \times p$, comprenant $n$ individus et $p$ variables quantitatives. 
+
+> **Piège Classique sous R :** Par défaut, la fonction `matrix()` remplit les structures de données colonne par colonne. Pour forcer un remplissage ligne par ligne (de gauche à droite), l'argument `byrow = TRUE` est indispensable.
+
+```{r matrix-creation}
+# Remplissage explicite ligne par ligne pour respecter la structure Individus x Variables
+X <- matrix(data = c(5, 4, 
+                     4, 5, 
+                     1, -2, 
+                     0, -3), 
+            nrow = 4, 
+            ncol = 2, 
+            byrow = TRUE)
+colnames(X) <- c("X1", "X2")
+```
+
+---
+
+# Métriques, Variances et Standardisation
+
+## Pourquoi Normaliser / Standardiser ?
+
+La majorité des algorithmes de clustering reposent sur des calculs géométriques (notamment la distance Euclidienne). Si les variables présentent des ordres de grandeur ou des variances drastiquement hétérogènes (par exemple, comparer des apports caloriques de l'ordre de $2000\text{ kcal}$ avec un taux de sodium de l'ordre de $0.5\text{ g}$), la variable à forte variance écrasera complètement les autres dans le calcul des distances. Normaliser les données permet de donner le même poids à chaque variable dans le calcul des dissimilarités.
+
+## Standardisation (Z-score Normalization)
+La standardisation consiste à transformer chaque variable pour lui donner une moyenne nulle et une variance unitaire. Pour un individu $i$ et une variable $j$, la formule mathématique est :
+$$z_{ij} = \frac{x_{ij} - \bar{x}_j}{\sigma_j}$$
+Où $\bar{x}_j$ est la moyenne empirique de la variable $j$ et $\sigma_j$ son écart-type non corrigé.
+
+## Normalisation Min-Max (Min-Max Scaling)
+Une alternative courante est la normalisation Min-Max, qui rescale les valeurs pour les contraindre strictement dans un intervalle donné, généralement $[0, 1]$. La formule s'énonce :
+$$x'_{ij} = \frac{x_{ij} - \min(x_j)}{\max(x_j) - \min(x_j)}$$
+
+### Comparaison et Choix Méthodologique
+* **Normalisation Min-Max :** Très utile lorsque les données doivent être bornées (ex: traitement d'images ou réseaux de neurones). Cependant, elle est extrêmement sensible aux valeurs aberrantes (*outliers*). Si un individu possède une valeur démesurée, toutes les autres observations se retrouveront écrasées sur un intervalle très réduit, perdant ainsi leur pouvoir discriminant.
+* **Standardisation (Z-score) :** C'est la méthode privilégiée en clustering géométrique ($K$-means, CAH) et en ACP. Elle préserve la forme de la distribution d'origine et gère beaucoup mieux les valeurs extrêmes. De plus, elle s'aligne directement avec la décomposition de l'inertie du théorème de Huygens où l'inertie totale d'un jeu de données standardisé est rigoureusement égale au nombre de variables $p$. **C'est cette méthode que nous appliquons ici.**
+
+## Le Piège Fondamental de la Variance sous R
+Par défaut, les fonctions natives `var()` et `sd()` de R estiment systématiquement la **variance corrigée** (notée $s^2$, divisée par $n-1$) :
+$$s^2 = \frac{1}{n-1}\sum_{i=1}^{n}(x_i - \bar{x})^2$$
+
+Or, dans les développements théoriques du clustering (et fréquemment lors des travaux dirigés et examens), on utilise la **variance empirique non corrigée** (notée $\sigma^2$, divisée par $n$) :
+$$\sigma^2 = \frac{1}{n}\sum_{i=1}^{n}(x_i - \bar{x})^2$$
+
+Pour passer de l'écart-type corrigé (R) à l'écart-type théorique requis, on applique la correction mathématique suivante :
+$$\sigma = s \times \sqrt{\frac{n-1}{n}}$$
+
+## Standardisation Exacte avec `scale()`
+La fonction `scale()` utilise par défaut l'écart-type corrigé. Pour exécuter ce bloc de code de manière totalement autonome sans dépendre d'une source externe, nous initialisons ici explicitement la matrice `data` :
+
+```{r standardization}
+# Définition autonome de la matrice de données pour garantir l'exécution
+data <- matrix(data = c(5, 4, 
+                     4, 5, 
+                     1, -2, 
+                     0, -3), 
+            nrow = 4, 
+            ncol = 2, 
+            byrow = TRUE)
+colnames(data) <- c("X1", "X2")
+n <- nrow(data)
+
+# Approche 1 : Calcul explicite de l'écart-type non corrigé par colonne
+sd_non_corrige <- apply(data, 2, sd) * sqrt((n-1)/n)
+Z <- scale(data, center = TRUE, scale = sd_non_corrige)
+
+# Approche 2 : Astuce algébrique directe après l'appel standard de scale()
+Z <- scale(data) * sqrt(n / (n-1))
+
+```
+
+---
+
+# Espaces Métriques et Mesures de Dissimilarité
+
+La matrice de distances contient les mesures de dissimilarité entre chaque paire d'individus. Elle est calculée en utilisant la norme de Minkowski $L_p$.
+
+## Les Familles de Distances (Norme $L_p$)
+Pour deux individus $i$ et $j$ dans $\mathbb{R}^p$ :
+$$\|x_i - x_j\|_p = \left( \sum_{k=1}^{p} |x_{ik} - x_{jk}|^p \right)^{\frac{1}{p}}$$
+
+* **$p = 1$ : Distance de Manhattan.** Somme des écarts absolus (déplacement en grille de type "City-block").
+* **$p = 2$ : Distance Euclidienne.** Longueur de la ligne droite reliant les deux points (fondée sur le théorème de Pythagore généralisé). C'est la métrique standard.
+* **$p \to \infty$ : Distance du Maximum (Tchebychev).** Ne conserve que l'écart absolu le plus élevé parmi toutes les dimensions : $D(i,j) = \max_k |x_{ik} - x_{jk}|$.
+
+## Manipulation de l'Objet `dist` sous R
+La fonction `dist()` renvoie un objet compact de classe `dist` (matrice triangulaire inférieure). Pour pouvoir l'inspecter ou extraire des valeurs cibles, une conversion explicite est nécessaire.
+
+```{r distance-manipulation}
+# Calcul de la matrice des distances euclidiennes sur les données centrées-réduites Z
+D <- dist(Z, method = "euclidean")
+
+# Conversion en matrice symétrique classique pour inspection
+D_mat <- as.matrix(D)
+
+# Exemple de lecture de la distance entre l'individu 3 et l'individu 1
+distance_3_1 <- D_mat[3, 1]
+
+# Reconversion en objet 'dist' impérative pour l'utilisation dans hclust()
+D <- as.dist(D_mat)
+```
+
+---
+
+# L'Algorithme des K-Means 
+
+## Fondement Théorique : Théorème de Huygens
+L'algorithme des $K$-means cherche à construire une partition des données en $K$ classes en minimisant la dispersion globale interne des classes. Ce mécanisme s'appuie rigoureusement sur le théorème de Huygens de décomposition de l'inertie :
+$$\text{Inertie Totale (TSS)} = \text{Inertie Intra-classe (WSS)} + \text{Inertie Inter-classe (BSS)}$$
+
+Où :
+
+* **Inertie Totale (Total Sum of Squares) :** $\text{TSS} = \frac{1}{n}\sum_{i=1}^{n}\|x_i - g\|^2$, où $g$ est le centre de gravité global. Cette valeur est constante pour un jeu de données donné.
+
+* **Inertie Intra-classe (Within Sum of Squares) :** $\text{WSS} = \sum_{k=1}^{K}\frac{1}{n}\sum_{i \in C_k}\|x_i - g_k\|^2$, mesurant l'hétérogénéité interne des groupes. L'algorithme cherche à la **minimiser**.
+
+* **Inertie Inter-classe (Between Sum of Squares) :** $\sum_{k=1}^{K}\frac{n_k}{n}\|g_k - g\|^2$, mesurant la séparation entre les groupes. Minimiser $\text{WSS}$ équivaut strictement à **maximiser** $\text{BSS}$.
+
+**Complexité Algorithmique :** $\mathcal{O}(K \times p \times n \times T)$ (où $T$ est le nombre d'itérations). Sa complexité linéaire par rapport au nombre d'individus en fait l'outil idéal pour le traitement de grands volumes de données.
+
+## Implémentation Avancée et Contrôle des Minima Locaux
+L'algorithme étant dépendant de l'initialisation aléatoire des centres de gravité, il peut converger vers un minimum local (une mauvaise partition). Il est **impératif** de spécifier un nombre d'itérations initiales élevé via l'argument `nstart`. Comme notre matrice d'exemple `Z` ne contient que 4 individus uniques, nous ajustons ici temporairement le nombre de centres à une valeur cohérente ($K=2$) pour éviter toute erreur d'exécution sur notre jeu de données restreint.
+
+```{r kmeans-implementation}
+# Exécution robuste des K-means avec 50 initialisations aléatoires distinctes (K=2 adapté à l'échantillon jouet)
+res_km <- kmeans(Z, centers = 2, nstart = 50, iter.max = 20)
+
+# Extraction des hyperparamètres et métriques de la partition
+part_km <- res_km$cluster         # Vecteur d'assignation des classes (1 à 2)
+WSS     <- res_km$tot.withinss    # Inertie Intra-classe globale
+BSS     <- res_km$betweenss       # Inertie Inter-classe
+TSS     <- res_km$totss           # Inertie Totale
+
+# Calcul du R-carré (Inertie expliquée / Qualité globale de la partition)
+inertie_exp_km <- BSS / TSS
+```
+
+---
+
+# Classification Ascendante Hiérarchique (CAH) de Ward
+
+##  Critères d'Agrégation sous `hclust()`
+La fonction `hclust(d, method)` requiert une attention particulière quant à la nature de ses arguments :
+
+* **`method = "single"`** : Lien minimum. Risque d'effet de chaîne.
+* **`method = "complete"`** : Lien maximum (valeur par défaut). Privilégie les groupes sphériques.
+* **`method = "average"`** : Lien moyen.
+* **`method = "centroid"`** : Distance entre les centres de gravité.
+* **`method = "ward.D"`** : Saut d'inertie minimal.
+
+## Le Coût de Fusion de Ward et le Piège de l'Argument `d`
+Contrairement aux autres méthodes qui acceptent une simple matrice de distances géométriques, la méthode de Ward vise à regrouper les classes dont la fusion provoque la plus faible augmentation de l'Inertie Intra-classe globale.
+
+La formule du coût de la fusion de deux classes $A$ et $B$ s'énonce ainsi :
+$$\Delta \text{WSS}(A, B) = \frac{w_A w_B}{w_A + w_B} \|g_A - g_B\|^2$$
+Où $w_A$ et $w_B$ représentent les poids respectifs des groupes (souvent leur effectif ou leur proportion relative).
+
+Pour que la fonction `hclust()` simule exactement ce comportement mathématique, **on doit lui fournir les distances au carré, ajustées selon le système de pondération retenu** :
+
+### Cas n°1 : Poids unitaires par individu ($w_i = 1$)
+Le facteur de poids entre deux singletons vaut $\frac{1 \times 1}{1 + 1} = \frac{1}{2}$. La matrice d'entrée doit donc être $\frac{D^2}{2}$.
+```{r ward-poids-1}
+D <- dist(Z, method = "euclidean")
+tree_poids_1 <- hclust(d = D^2 / 2, method = "ward.D")
+```
+
+### Cas n°2 : Poids proportionnels à l'échantillon ($w_i = \frac{1}{n}$)
+Le facteur de poids entre deux singletons vaut $\frac{\frac{1}{n} \times \frac{1}{n}}{\frac{1}{n} + \frac{1}{n}} = \frac{1}{2n}$. La matrice d'entrée doit être $\frac{D^2}{2n}$. Cette option est indispensable si l'on souhaite que la somme des hauteurs du dendrogramme soit égale à la variance totale du nuage ($\text{TSS} = p$ en données centrées-réduites).
+```{r ward-poids-n}
+n <- nrow(Z)
+tree_poids_n <- hclust(d = D^2 / (2 * n), method = "ward.D")
+```
+
+## Esthétique et Alignement du Dendrogramme
+Par défaut, R affiche les étiquettes des feuilles à des niveaux variables selon l'indice de fusion initial, générant un rendu peu lisible. L'argument `hang = -1` force le prolongement vertical de l'intégralité des branches terminales jusqu'à l'ordonnée $0$.
+
+```{r plot-dendrogram}
+# Visualisation hautement lisible avec alignement horizontal des singletons
+plot(tree_poids_1, hang = -1, main = "Dendrogramme CAH (Critère de Ward)", xlab = "Individus", sub = "")
+```
+
+## Analyse Algébrique des Hauteurs de Coupures
+La valeur de `tree$height` contient les coûts successifs des fusions (les sauts d'inertie). La somme de toutes les hauteurs du dendrogramme équivaut exactement à l'Inertie Totale du système ($\text{TSS}$).
+
+Pour une coupure adaptée à notre échantillon de 4 individus, nous configurons ici une cible à $K = 2$ classes :
+```{r heights-extraction}
+# Extraction et tri décroissant des sauts d'inertie
+h_tries <- sort(tree_poids_1$height, decreasing = TRUE)
+
+# Inertie Inter-classe (BSS) : Somme des (K-1) plus grandes hauteurs (K=2 ici)
+K <- 2
+BSS_ward <- sum(h_tries[1:(K-1)])
+
+# Inertie Intra-classe (WSS) : Somme des (n-K) plus petites hauteurs
+h_croissant <- sort(tree_poids_1$height, decreasing = FALSE)
+WSS_ward <- sum(h_croissant[1:(n-K)])
+
+# Découpage final de l'arbre et mise en forme du facteur de partition
+part_ward <- as.factor(cutree(tree_poids_1, k = K))
+levels(part_ward) <- paste0("C", 1:K)
+```
+
+---
+
+# Sélection Optimale du Nombre de Classes ($K$)
+
+Le choix du nombre idéal de clusters repose sur la confrontation de plusieurs métriques de performance :
+
+1.  **La Méthode du Coude (Elbow Method) :** On trace l'évolution de l'Inertie Intra-classe ($\text{WSS}$) en fonction de $K$. On identifie visuellement le point d'inflexion (le "coude") à partir duquel l'ajout d'une classe supplémentaire n'induit plus de réduction significative de l'hétérogénéité interne.
+2.  **Le Score de Silhouette Moyen (Average Silhouette Width) :** Pour un individu $i$, sa silhouette $s(i)$ évalue la cohérence de son affectation :
+    $$s(i) = \frac{b(i) - a(i)}{\max(a(i), b(i))}$$
+    Où $a(i)$ est la distance moyenne de $i$ aux points de sa propre classe, et $b(i)$ la distance moyenne minimale de $i$ aux points de la classe voisine la plus proche. L'indice global varie entre $-1$ et $1$. On retient le $K$ qui maximise le score moyen.
+3.  **La Statistique du Gap (Gap Statistic) :** Elle compare l'Inertie Intra-classe observée $\log(\text{WSS}_K)$ à son espérance mathématique calculée sous l'hypothèse d'une distribution de référence uniforme sans structure (loi nulle). On sélectionne le $K$ maximisant cet écart.
+
+---
+
+# Interprétation Statistique des Classes (`catdes`)
+
+## Fondement Théorique du V-Test
+Pour comprendre les caractéristiques socio-démographiques ou physiques des classes construites, la fonction `catdes()` de `FactoMineR` évalue la représentativité des variables au travers du **V-test**.
+
+L'algorithme teste l'hypothèse nulle $H_0$ : *"La moyenne de la variable au sein de la classe $k$ ne se distingue pas de la moyenne globale de cette variable sur l'ensemble de la population"*. Sous $H_0$, la statistique suit une loi hypergéométrique (dans le cadre d'un test exact sans remise) approximée par une loi normale centrée réduite $\mathbf{N}(0,1)$.
+
+* Si $|V\text{-test}| > 1.96$, la p-value associée est inférieure à $0.05$ : la variable est considérée comme **significative** pour caractériser la classe.
+* **$V\text{-test} > 0$ :** Surchargement. La moyenne du groupe est statistiquement **supérieure** à la moyenne globale.
+* **$V\text{-test} < 0$ :** Sous-chargement. La moyenne du groupe est statistiquement **inférieure** à la moyenne globale.
+
+## Implémentation R
+```{r catdes-interpretation}
+library(FactoMineR)
+
+# Structuration du dataframe associant la variable de partition aux données standardisées
+df_test <- data.frame(Classe = part_ward, Z)
+
+# Analyse des variables caractérisant la partition (seuil de significativité fixé à 5%)
+res_catdes <- catdes(donnee = df_test, num.var = 1, proba = 0.05)
+
+# Visualisation des variables quantitatives significatives pour le Cluster 1
+print(res_catdes$quanti$C1)
+```
+
+---
+
+# Stratégies Algorithmiques Avancées
+
+## Pré-clustering pour Données Massives (*Big Data*)
+La CAH possède une complexité spatiale et temporelle quadratique $O(n^2)$, provoquant une saturation de la mémoire vive dès que $n$ dépasse quelques dizaines de milliers d'individus. Pour y pallier, on applique une stratégie mixte :
+1.  On résume le jeu de données géant en un grand nombre de micro-clusters (ex: $K=1000$) via l'algorithme des $K$-means.
+2.  On applique la CAH directement sur les centres de gravité obtenus, en activant le paramètre `members` pour injecter le poids (l'effectif) de chaque micro-cluster dans le calcul du coût de fusion de Ward.
+
+
+```{r big-data-strategy}
+
+# Initialisation d'un faux jeu de données massives pour l'autonomie du script (10 000 individus, 10 variables)
+set.seed(42)
+donnees_geantes <- matrix(rnorm(100000, mean = 0, sd = 1), nrow = 10000, ncol = 10)
+colnames(donnees_geantes) <- paste0("V", 1:10)
+
+# Étape 1 : Réduction de dimension par K-means sur données massives
+km_big <- kmeans(donnees_geantes, centers = 1000, nstart = 10)
+
+# Étape 2 : CAH de Ward sur les centres condensés avec prise en compte des effectifs
+tree_big <- hclust(dist(km_big$centers)^2 / 2, method = "ward.D", members = km_big$size)
+
+```
+
+## Traitement des Données Mixtes : `PCAmix`
+La construction de distances Euclidiennes requiert exclusivement des attributs quantitatifs. En présence d'un jeu de données mixte (variables numériques et textuelles/catégorielles), on effectue un codage préalable par une Analyse Factorielle des Données Mixtes via l'extension `PCAmixdata`.
+
+Le nombre maximal de dimensions extraites est majoré par $\min(n-1, p_1 + m - p_2)$ où $p_1$ est le nombre de quantitatives, $m$ le nombre total de modalités qualitatives et $p_2$ le nombre de variables qualitatives.
+
+```{r pcamix-strategy}
+library(PCAmixdata)
+
+# Simulation d'un jeu de données mixte pour assurer l'autonomie du bloc
+set.seed(42)
+# 1. Variables quantitatives (numériques)
+data_quant <- matrix(rnorm(8, mean = 10, sd = 2), nrow = 4, ncol = 2)
+colnames(data_quant) <- c("VarQuant1", "VarQuant2")
+
+# 2. Variables qualitatives (facteurs / catégories)
+data_qual <- data.frame(
+  VarQual1 = as.factor(c("A", "B", "A", "B")),
+  VarQual2 = as.factor(c("X", "X", "Y", "Y"))
+)
+
+# Extraction des coordonnées factorielles continues issues de l'analyse mixte
+res_pcamix <- PCAmix(X.quanti = data_quant, X.quali = data_qual, graph = FALSE)
+coord_mixtes <- res_pcamix$ind$coord
+
+# Calcul de la matrice de distances géométriques sur l'espace latent
+D_mix <- dist(coord_mixtes)
+```
+
+## Consolidation d'une Partition
+La CAH offre une excellente stabilité globale pour déterminer le nombre de classes optimal, mais ses décisions de coupure sont irréversibles. Pour optimiser localement les frontières des classes, on réinjecte les centres de gravité de la CAH comme points d'initialisation dans un algorithme $K$-means.
+
+```{r consolidation}
+# Extraction des centres de gravité par classe de la CAH
+centres_init <- aggregate(Z, by = list(part_ward), FUN = mean)[, -1]
+
+# Réajustement des frontières par K-means (Consolidation)
+res_consolide <- kmeans(Z, centers = centres_init)
+part_km_consolide <- res_consolide$cluster
+
+# Matrice de confusion pour observer les réaffectations d'individus aux frontières
+table(part_ward, part_km_consolide)
+```
+
+---
+
+# Rappels Fondamentaux sur l'Analyse en Composantes Principales (ACP)
+
+L'ACP est fréquemment exploitée en amont du clustering pour débruiter le signal et réduire le nombre de dimensions.
+
+## ACP Normée vs Non Normée
+* **ACP Normée (`scale.unit = TRUE`) :** On diagonalise la matrice des corrélations $R$. Toutes les variables possèdent un poids équivalent (variance unitaire égale à $1$). L'Inertie Totale du système est strictement égale au nombre de variables $p$.
+* **ACP Non Normée (`scale.unit = FALSE`) :** On diagonalise la matrice des covariances $C$. Les axes factoriels capturent prioritairement la géométrie des variables possédant les variances absolues les plus importantes.
+
+## Formules Clés d'Extraction Factorielle
+Soit $\lambda_\alpha$ la valeur propre associée à l'axe $\alpha$ (représentant la variance extraite par cet axe) :
+
+* **Coordonnées des individus ($f_\alpha$) :** Projection du vecteur centré-réduit sur le vecteur propre $u_\alpha$, accessible via `res_pca$ind$coord`.
+* **Qualité de représentation (Cosinus au carré $\cos^2$) :** Évalue la fidélité de la projection de l'individu $i$ sur l'axe $\alpha$ :
+    $$\cos^2(i, \alpha) = \frac{f_{\alpha, i}^2}{\sum_{\beta} f_{\beta, i}^2}$$
+* **Contribution Relative ($\text{Ctr}$) :** Détermine la part de responsabilité de l'individu $i$ dans l'inertie (la construction) de
