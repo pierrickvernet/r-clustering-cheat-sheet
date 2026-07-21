@@ -1,61 +1,62 @@
-# 🛠️ R Clustering Cheat Sheet
+# R Clustering Fiche de Révision
 
-[![R-Version](https://img.shields.io/badge/R-%3E%3D%204.0.0-blue.svg)](https://www.r-project.org/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-
-Guide technique, théorique et méthodologique du clustering géométrique sous R. Ce dépôt rassemble les implémentations autonomes, les démonstrations mathématiques et les bonnes pratiques pour maîtriser l'apprentissage non supervisé tout en évitant les pièges algorithmiques classiques.
-
-🌐 **Version HTML interactive :** [https://pierrickvernet.github.io/r-clustering-cheat-sheet/fiche_Kmeans.html](https://pierrickvernet.github.io/r-clustering-cheat-sheet/fiche_Kmeans.html)
+## 1. INTRODUCTION
+- **Cadre de réalisation :** Aide-mémoire technique, théorique et méthodologique de niveau Master (Statistiques Multivariées).
+- **Présentation du sujet :** Ce dépôt rassemble un guide technique et théorique dédié au partitionnement de données (*clustering*) géométrique et à la réduction de dimension sous R. Il combine démonstrations mathématiques, bonnes pratiques de code et implémentations R autonomes.
+- **Intérêt et cas d'usage :** Permettre aux analystes et recruteurs d'appréhender le fonctionnement interne des algorithmes d'apprentissage non supervisé, de maîtriser la décomposition de l'inertie et d'éviter les biais d'implémentation fréquents sous R (gestion de la variance, métriques de distance, paramètres d'agrégation).
 
 ---
 
-## 📌 Aperçu du Projet
-
-En data science, le partitionnement de données (*clustering*) et la réduction de dimension reposent sur des fondements géométriques stricts. Ce dépôt propose une synthèse de niveau Master (Statistiques Multivariées) pour appréhender les coulisses mathématiques des algorithmes et leur comportement exact sous R.
-
-### 🎯 Objectifs
-* **Rigueur Théorique :** Comprendre la décomposition de l'inertie (Théorème de Huygens), les métriques de Minkowski, et le critère de Ward.
-* **Sécurisation du Code :** Identifier et contourner les comportements par défaut de R (biais de variance avec `scale()`, remplissage de `matrix()`, argument `d` de `hclust()`).
-* **Autonomie :** Fournir des blocs de code R reproductibles, sans dépendances externes complexes, applicables du jeu de données jouet aux *Big Data*.
+## 2. SOURCES ET DONNÉES
+- **Origine des données :** Structures matricielles, jeux de données synthétiques et cas pratiques manipulés directement dans l'environnement R.
+- **Périmètre et caractéristiques :**
+  - Traitement des données quantitatives continues et des jeux de données mixtes (combinaison de variables numériques et catégorielles).
+  - Couverture des approches applicables des petits échantillons aux architectures de pré-clustering pour volumes de données plus importants.
 
 ---
 
-## 🗺️ Sommaire Analytique
+## 3. MÉTHODOLOGIE ET DÉTAILS TECHNIQUES
 
-1. **Théorie : Apprentissage et Structures de Données**
-   * Différences fondamentales avec le supervisé ($k$-NN, SVM).
-   * Représentation matricielle et piège du remplissage ligne/colonne.
-2. **Métriques, Variances et Standardisation**
-   * Choix méthodologique : Z-score vs Min-Max.
-   * Correction de la variance empirique non corrigée ($\sigma$) vs variance estimée ($s^2$).
-3. **Espaces Métriques & Dissimilarités**
-   * Distances d'Euclide, de Manhattan et de Tchebychev ($L_p$).
-4. **Algorithme des K-Means**
-   * Optimisation locale et gestion du paramètre `nstart`.
-5. **Classification Ascendante Hiérarchique (CAH)**
-   * Coût de fusion de Ward et ajustement rigoureux des distances au carré.
-6. **Validation de la Partition**
-   * Méthode du coude, score de silhouette moyen et statistique du Gap.
-7. **Stratégies Avancées & Analyse Factorielle**
-   * Pré-clustering pour données massives, traitement des données mixtes (`PCAmix`) et ACP.
+### Pipeline d'analyse et fondements mathématiques
+1. **Géométrie des données et prétraitement :**
+   - **Décomposition de l'inertie :** Application du théorème de Huygens ($Inertie\ Totale = Inertie\ Intra-classe + Inertie\ Inter-classe$).
+   - **Standardisation :** Comparaison entre centrage-réduction ($Z$-score) et normalisation Min-Max. Prise en compte du calcul de la variance empirique ($\sigma$) par rapport à la variance corrigée ($s^2$) dans les fonctions natives R.
+   - **Espaces métriques :** Mesure des dissimilarités via les distances de Minkowski ($L_p$ : Euclidienne, Manhattan, Tchebychev).
+2. **Algorithmes de classification :**
+   - **$k$-means :** Minimisation de l'inertie intra-classe et gestion de la convergence vers un optimum local via le paramètre `nstart`.
+   - **Classification Ascendante Hiérarchique (CAH) :** Minimisation du coût de fusion selon le critère de Ward et manipulation des matrices de distances au carré.
+   - **Réduction de dimension & Données mixtes :** Prise en charge des variables hybrides via l'Analyse en Composantes Principales (ACP) et les méthodes factorielles du package `PCAmixdata`.
+3. **Évaluation et validation des partitions :**
+   - Méthode du coude (optimisation de l'inertie).
+   - Indice de Silhouette moyen.
+   - Statistique du Gap.
+   - Caractérisation des classes par la valeur-test ($V$-test) pour identifier les variables significativement discriminantes.
 
-
-## 🛠️ Technologies & Packages Utilisés
-
-L'ensemble des scripts s'appuie principalement sur les fonctions natives de R pour garantir une pérennité maximale du code. Les extensions suivantes sont exploitées pour les besoins avancés :
-
-* **FactoMineR** : Pour l'interprétation des classes via le V-test (`catdes()`).
-* **PCAmixdata** : Pour le codage et l'analyse factorielle des variables mixtes.
+### Technologies et bibliothèques (Environnement R)
+- **R Markdown / HTML :** `knitr`, `rmarkdown` pour la génération des fiches interactives.
+- **Fonctions natives R (`stats`) :** `kmeans()`, `hclust()`, `dist()`, `scale()`, `prcomp()`.
+- **Packages spécialisés :**
+  - `FactoMineR` : Interprétation et description des groupes via `catdes()`.
+  - `PCAmixdata` : Traitement factoriel des jeux de données mixtes.
 
 ---
 
-## ✍️ Auteur
-
-* **Pierrick Vernet** – Master IREF (Université de Bordeaux)
-* GitHub : [@pierrickvernet](https://github.com/pierrickvernet)
+## 4. CONCLUSION ET RÉSULTATS CLÉS
+- **Apports du projet :** Documentation claire assurant le lien entre l'économétrie/statistique multivariée et la mise en œuvre pratique sous R.
+- **Consultation directe :** Un support interactif complet est accessible en ligne : [Fiche K-means HTML](https://pierrickvernet.github.io/r-clustering-cheat-sheet/fiche_Kmeans.html).
+- **Limites et perspectives :** Extension possible vers la modélisation par mélange de gaussiennes (GMM) et les algorithmes fondés sur la densité (DBSCAN).
 
 ---
 
-## 📄 License
+## 5. STRUCTURE DU DÉPÔT
 
-Ce projet est sous licence MIT. N'hésitez pas à l'utiliser, le fork ou l'enrichir pour vos propres révisions ou projets.
+```text
+.
+├── .gitattributes         # Configuration des attributs Git
+├── fiche_Kmeans.Rmd       # Code source RMarkdown du guide interactif
+├── fiche_Kmeans.html      # Version HTML compilée et interactive
+└── README.md              # Documentation du dépôt
+```
+
+---
+
