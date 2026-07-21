@@ -55,9 +55,10 @@
 ```text
 .
 ├── .gitattributes         # Configuration des attributs Git
+├── README.md              # Documentation du dépôt
 ├── fiche_Kmeans.Rmd       # Code source RMarkdown du guide interactif
-├── fiche_Kmeans.html      # Version HTML compilée et interactive
-└── README.md              # Documentation du dépôt
+└── fiche_Kmeans.html      # Version HTML compilée et interactive
+
 ```
 
 ---
