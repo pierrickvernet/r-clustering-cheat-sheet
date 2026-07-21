@@ -1,7 +1,7 @@
 # R Clustering Fiche de Révision
 
 ## 1. INTRODUCTION
-- **Cadre de réalisation :** Aide-mémoire technique, théorique et méthodologique de niveau Master (Statistiques Multivariées).
+- **Cadre de réalisation :** Aide-mémoire technique, théorique et méthodologique de statistique computationelle.
 - **Présentation du sujet :** Ce dépôt rassemble un guide technique et théorique dédié au partitionnement de données (*clustering*) géométrique et à la réduction de dimension sous R. Il combine démonstrations mathématiques, bonnes pratiques de code et implémentations R autonomes.
 - **Intérêt et cas d'usage :** Permettre aux analystes et recruteurs d'appréhender le fonctionnement interne des algorithmes d'apprentissage non supervisé, de maîtriser la décomposition de l'inertie et d'éviter les biais d'implémentation fréquents sous R (gestion de la variance, métriques de distance, paramètres d'agrégation).
 
