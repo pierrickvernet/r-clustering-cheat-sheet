@@ -1,5 +1,7 @@
 # R Clustering Fiche de Révision
 
+[Fiche K-means HTML](https://pierrickvernet.github.io/r-clustering-cheat-sheet/fiche_Kmeans.html).
+
 ## 1. INTRODUCTION
 - **Cadre de réalisation :** Aide-mémoire technique, théorique et méthodologique de statistique computationelle.
 - **Présentation du sujet :** Ce dépôt rassemble un guide technique et théorique dédié au partitionnement de données (*clustering*) géométrique et à la réduction de dimension sous R. Il combine démonstrations mathématiques, bonnes pratiques de code et implémentations R autonomes.
